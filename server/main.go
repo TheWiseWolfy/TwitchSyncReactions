@@ -1,51 +1,20 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
-	"net/http"
-	"os"
+	embedregistry "ebs_server/embed-registry"
 
-	"github.com/rs/cors"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
-type VideoRequest struct {
-	streamId string
-}
-
-type VideoResponse struct {
-	videoUrl string
-}
-
-var myMap = map[string]string{
-	"U102975477": "https://www.youtube.com/embed/uGGQGoht6ic",
-}
-
-func getVideo(w http.ResponseWriter, r *http.Request) {
-	var req VideoRequest
-	fmt.Printf("REQ %s", string(r.RequestURI))
-	req.streamId = r.URL.Query().Get("streamId")
-	if req.streamId == "" {
-		http.Error(w, "", http.StatusBadRequest)
-		return
-	}
-
-	var res VideoResponse
-	res.videoUrl = myMap[req.streamId]
-	json.NewEncoder(w).Encode(res)
-}
-
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", getVideo)
-	handler := cors.Default().Handler(mux)
+	e := echo.New()
+	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Format: "method=${method}, uri=${uri}, status=${status}\n",
+	}))
 
-	err := http.ListenAndServe(":3333", handler)
-	if errors.Is(err, http.ErrServerClosed) {
-		fmt.Printf("server closed\n")
-	} else if err != nil {
-		fmt.Printf("error starting server: %s\n", err)
-		os.Exit(1)
-	}
+	videoHandler := NewVideoHandler(embedregistry.NewEmbedRegistry())
+	e.GET("/video", videoHandler.GetVideo)
+	e.POST("/video", videoHandler.UpdateVideo)
+	e.Logger.Fatal(e.Start(":3333"))
 }
